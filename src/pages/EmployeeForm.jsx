@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+const API = 'http://localhost:5000/api/employees'
+
 const DESIGNATIONS = [
   'Software Engineer', 'Senior Engineer', 'Tech Lead', 'Product Manager',
   'UI/UX Designer', 'DevOps Engineer', 'QA Engineer', 'Data Analyst',
@@ -16,20 +18,22 @@ const initialState = { name: '', designation: '', location: '', salary: '' }
 export default function EmployeeForm() {
   const [form, setForm]           = useState(initialState)
   const [errors, setErrors]       = useState({})
+  const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(null)
   const [showToast, setShowToast] = useState(false)
   const [records, setRecords]     = useState([])
+  const [apiError, setApiError]   = useState(null)
 
   // ---- Validation ----
   const validate = () => {
     const e = {}
-    if (!form.name.trim())            e.name        = 'Name is required.'
-    else if (form.name.trim().length < 3) e.name    = 'Name must be at least 3 characters.'
-    if (!form.designation)            e.designation = 'Please select a designation.'
-    if (!form.location)               e.location    = 'Please select a location.'
-    if (!form.salary)                 e.salary      = 'Salary is required.'
+    if (!form.name.trim())               e.name        = 'Name is required.'
+    else if (form.name.trim().length < 3) e.name       = 'Name must be at least 3 characters.'
+    if (!form.designation)               e.designation = 'Please select a designation.'
+    if (!form.location)                  e.location    = 'Please select a location.'
+    if (!form.salary)                    e.salary      = 'Salary is required.'
     else if (isNaN(form.salary) || Number(form.salary) <= 0)
-                                      e.salary      = 'Enter a valid positive salary.'
+                                         e.salary      = 'Enter a valid positive salary.'
     return e
   }
 
@@ -40,24 +44,50 @@ export default function EmployeeForm() {
     if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }))
   }
 
-  const handleSubmit = e => {
+  const handleSubmit = async e => {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
 
-    const newRecord = { ...form, id: Date.now() }
-    setRecords(prev => [newRecord, ...prev])
-    setSubmitted(newRecord)
-    setForm(initialState)
-    setErrors({})
-    setShowToast(true)
-    setTimeout(() => setShowToast(false), 3500)
+    setSubmitting(true)
+    setApiError(null)
+
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:        form.name.trim(),
+          designation: form.designation,
+          location:    form.location,
+          salary:      Number(form.salary),
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Server error. Please try again.')
+      }
+
+      const saved = await res.json()
+      setRecords(prev => [saved, ...prev])
+      setSubmitted(saved)
+      setForm(initialState)
+      setErrors({})
+      setShowToast(true)
+      setTimeout(() => setShowToast(false), 3500)
+    } catch (err) {
+      setApiError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleReset = () => {
     setForm(initialState)
     setErrors({})
     setSubmitted(null)
+    setApiError(null)
   }
 
   const formatSalary = val =>
@@ -70,10 +100,10 @@ export default function EmployeeForm() {
       {showToast && (
         <div className="toast-overlay">
           <div className="toast-card">
-            <div className="toast-icon">✅</div>
+            <div className="toast-icon">&#x2705;</div>
             <div>
               <div className="toast-title">Employee Added!</div>
-              <div className="toast-msg">Record saved successfully.</div>
+              <div className="toast-msg">Record saved to MongoDB Atlas.</div>
             </div>
           </div>
         </div>
@@ -88,13 +118,19 @@ export default function EmployeeForm() {
       <div className="form-wrapper">
         {/* Form Card */}
         <div className="form-card">
-          <p className="form-section-title">🔹 Personal &amp; Role Details</p>
+          <p className="form-section-title">&#x1F539; Personal &amp; Role Details</p>
+
+          {apiError && (
+            <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: '10px', padding: '0.9rem 1rem', marginBottom: '1.2rem', color: 'var(--danger)', fontSize: '0.875rem' }}>
+              &#x26A0;&#xFE0F; {apiError}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} noValidate>
             {/* Name */}
             <div className="form-group-custom">
               <label className="form-label-custom" htmlFor="name">
-                <span className="label-icon">👤</span> Full Name
+                <span className="label-icon">&#x1F464;</span> Full Name
               </label>
               <input
                 id="name"
@@ -106,7 +142,7 @@ export default function EmployeeForm() {
                 onChange={handleChange}
               />
               {errors.name && (
-                <div className="invalid-feedback-custom">⚠️ {errors.name}</div>
+                <div className="invalid-feedback-custom">&#x26A0;&#xFE0F; {errors.name}</div>
               )}
             </div>
 
@@ -114,7 +150,7 @@ export default function EmployeeForm() {
             <div className="form-grid">
               <div className="form-group-custom" style={{ margin: 0 }}>
                 <label className="form-label-custom" htmlFor="designation">
-                  <span className="label-icon">💼</span> Designation
+                  <span className="label-icon">&#x1F4BC;</span> Designation
                 </label>
                 <select
                   id="designation"
@@ -123,19 +159,19 @@ export default function EmployeeForm() {
                   value={form.designation}
                   onChange={handleChange}
                 >
-                  <option value="">Select designation…</option>
+                  <option value="">Select designation&#x2026;</option>
                   {DESIGNATIONS.map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
                 {errors.designation && (
-                  <div className="invalid-feedback-custom">⚠️ {errors.designation}</div>
+                  <div className="invalid-feedback-custom">&#x26A0;&#xFE0F; {errors.designation}</div>
                 )}
               </div>
 
               <div className="form-group-custom" style={{ margin: 0 }}>
                 <label className="form-label-custom" htmlFor="location">
-                  <span className="label-icon">📍</span> Location
+                  <span className="label-icon">&#x1F4CD;</span> Location
                 </label>
                 <select
                   id="location"
@@ -144,13 +180,13 @@ export default function EmployeeForm() {
                   value={form.location}
                   onChange={handleChange}
                 >
-                  <option value="">Select location…</option>
+                  <option value="">Select location&#x2026;</option>
                   {LOCATIONS.map(l => (
                     <option key={l} value={l}>{l}</option>
                   ))}
                 </select>
                 {errors.location && (
-                  <div className="invalid-feedback-custom">⚠️ {errors.location}</div>
+                  <div className="invalid-feedback-custom">&#x26A0;&#xFE0F; {errors.location}</div>
                 )}
               </div>
             </div>
@@ -158,7 +194,7 @@ export default function EmployeeForm() {
             {/* Salary */}
             <div className="form-group-custom" style={{ marginTop: '1.4rem' }}>
               <label className="form-label-custom" htmlFor="salary">
-                <span className="label-icon">💰</span> Monthly Salary (₹)
+                <span className="label-icon">&#x1F4B0;</span> Monthly Salary (&#x20B9;)
               </label>
               <input
                 id="salary"
@@ -171,17 +207,17 @@ export default function EmployeeForm() {
                 onChange={handleChange}
               />
               {errors.salary && (
-                <div className="invalid-feedback-custom">⚠️ {errors.salary}</div>
+                <div className="invalid-feedback-custom">&#x26A0;&#xFE0F; {errors.salary}</div>
               )}
             </div>
 
             {/* Actions */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.75rem', alignItems: 'start', marginTop: '0.5rem' }}>
-              <button type="submit" className="btn-submit">
-                ✚ Add Employee
+              <button type="submit" className="btn-submit" disabled={submitting}>
+                {submitting ? '&#x23F3; Saving&#x2026;' : '&#x271A; Add Employee'}
               </button>
               <button type="button" className="btn-reset" onClick={handleReset}>
-                ↺ Reset
+                &#x21BA; Reset
               </button>
             </div>
           </form>
@@ -191,11 +227,11 @@ export default function EmployeeForm() {
         {records.length > 0 && (
           <div style={{ marginTop: '2rem' }}>
             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem' }}>
-              📄 Submitted Records ({records.length})
+              &#x1F4C4; Submitted Records ({records.length})
             </h2>
             {records.map(rec => (
               <div
-                key={rec.id}
+                key={rec._id}
                 style={{
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border)',
@@ -216,7 +252,7 @@ export default function EmployeeForm() {
                   </li>
                   <li className="preview-item">
                     <span className="preview-label">Location</span>
-                    <span className="preview-value">📍 {rec.location}</span>
+                    <span className="preview-value">&#x1F4CD; {rec.location}</span>
                   </li>
                   <li className="preview-item">
                     <span className="preview-label">Salary</span>
